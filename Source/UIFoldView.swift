@@ -26,21 +26,41 @@ class FoldView: UIView {
     
     let foldJointCount: UInt8
     let viewToFold: UIView
-    let componentLayout: ComponentLayout
     let foldDirection: FoldDirection
-    var imageComponents: [UIImage]
-    
-    var joints: [CATransformLayer]
-    var shadows: [CALayer]
-    var componentWidth: CGFloat
-    var componentHeight: CGFloat
+
+
+
+
+    var imageComponents: [UIImage] = []
+    var joints: [CATransformLayer]  = []
+    var shadows: [CALayer] = []
+
+    var componentWidth: CGFloat = 0.0
+    var componentHeight: CGFloat = 0.0
     var perspectiveLayer: CALayer!
     var animationKeyPath: (x: CGFloat, y: CGFloat, z: CGFloat)!
     
     let maxShadowDensity = 0.8
-    
     var tempBounds: CGRect
-    var angle: Double {
+
+    var componentLayout: ComponentLayout
+    {
+        get
+        {
+            if (self.foldDirection == .topToBottom || self.foldDirection == .bottomToTop)
+            {
+                return .vertical
+
+            } else if (self.foldDirection == .leftToRight || self.foldDirection == .rightToLeft){
+                return .horizontal
+            }else{
+                return .horizontal
+            }
+        }
+    }
+
+
+    var angle: Double = 0 {
         
         didSet {
             var index = 0
@@ -64,110 +84,71 @@ class FoldView: UIView {
             
         }
     }
-    
-    
-    var perspective: CGFloat {
+
+    var perspective: CGFloat = 700 {
         didSet {
             var transform = CATransform3DIdentity
             transform.m34 = -1.0 / perspective
             perspectiveLayer.sublayerTransform = transform;
         }
     }
+
+    var unfoldLength:Double = 0{
+        didSet {
+            if componentLayout == ComponentLayout.horizontal {
+                let angleDecreases = (Double(tempBounds.size.width) < unfoldLength)
+
+                if angleDecreases {
+
+                    while (Double(tempBounds.size.width) < unfoldLength) {
+                        self.angle -= 0.5
+                    }
+
+                } else {
+
+                    while (Double(tempBounds.size.width) > unfoldLength) {
+                        self.angle += 0.5
+                    }
+                }
+
+            } else {
+                let angleDecreases = (Double(tempBounds.size.height) < unfoldLength)
+
+                if angleDecreases {
+                    while (Double(tempBounds.size.height) < unfoldLength) {
+                        self.angle -= 0.5
+                    }
+
+                } else {
+                    while (Double(tempBounds.size.height) > unfoldLength) {
+                        self.angle += 0.5
+                    }
+                }
+            }
+        }
+    }
     
-    
-    init(fromView view: UIView, jointCount: UInt8, componentLayout: ComponentLayout, foldDirection: FoldDirection, frame: CGRect) {
+    init(fromView view: UIView, jointCount: UInt8, foldDirection: FoldDirection) {
         
         self.foldJointCount = jointCount
         self.viewToFold = view
-        self.componentLayout = componentLayout
         self.foldDirection = foldDirection
-        self.componentWidth = 0.0
-        self.componentHeight = 0.0
-        self.imageComponents = [UIImage]()
-        self.perspective = 700.0
-        self.joints = [CATransformLayer]()
-        self.shadows = [CALayer]()
-        self.angle = 0.0
-        tempBounds = frame
+
+        tempBounds = view.frame
         
-        super.init(frame: frame)
-        
-        if (self.foldDirection == .topToBottom || self.foldDirection == .bottomToTop) && componentLayout == .horizontal {
-            NSException(name: NSExceptionName(rawValue: "Wrong type of fold direction"), reason: "TopToBottom and BottomToTop can't be used in Horizontal layout", userInfo: nil).raise()
-            
-            
-        } else if (self.foldDirection == .leftToRight || self.foldDirection == .rightToLeft) && componentLayout == .vertical {
-            NSException(name: NSExceptionName(rawValue: "Wrong type of fold direction"), reason: "LeftToRight and RightToLeft can't be used in Vertical layout", userInfo: nil).raise()
-            
-        }
+        super.init(frame: view.frame)
         
         createImageComponents()
         createLayers()
         
-        
-        //        angleProperty = POPAnimatableProperty.property(withName:"foldView.angle") { (prop) in
-        //
-        //
-        //            prop!.readBlock = {
-        //                obj, values
-        //                in
-        //                values![0] = CGFloat((obj as! FoldView).angle)
-        //            }
-        //
-        //            prop!.writeBlock = {
-        //                obj, values
-        //                in
-        //                (obj as! FoldView).angle = Double(values![0])
-        //            }
-        //
-        //
-        //            } as! POPAnimatableProperty;
-        
     }
-    
-    func openToDistance(_ distance: Double) {
-        
-        if componentLayout == ComponentLayout.horizontal {
-            let angleDecreases = (Double(tempBounds.size.width) < distance)
-            
-            if angleDecreases {
-                
-                while (Double(tempBounds.size.width) < distance) {
-                    self.angle -= 0.5
-                }
-                
-            } else {
-                
-                while (Double(tempBounds.size.width) > distance) {
-                    self.angle += 0.5
-                }
-            }
-            
-        } else {
-            let angleDecreases = (Double(tempBounds.size.height) < distance)
-            
-            if angleDecreases {
-                while (Double(tempBounds.size.height) < distance) {
-                    self.angle -= 0.5
-                }
-                
-            } else {
-                while (Double(tempBounds.size.height) > distance) {
-                    self.angle += 0.5
-                }
-            }
-            
-        }
-        
-    }
-    
-    
+
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
     fileprivate func createImageComponents() {
-        let screenShot = imageFromView(viewToFold)
+        let screenShot = renderImage(fromView: viewToFold)
         
         // there should be jointCount + 1 components
         
@@ -179,7 +160,7 @@ class FoldView: UIView {
             if componentLayout == .horizontal {
                 componentWidth = CGFloat(width) / (CGFloat(foldJointCount + 1))
                 componentHeight = CGFloat(height)
-                let componentImage = cropImageWithRect(screenShot, rect: CGRect(x: CGFloat(i) * componentWidth, y: 0, width: componentWidth, height: componentHeight));
+                let componentImage = crop(image:screenShot, withRect: CGRect(x: CGFloat(i) * componentWidth, y: 0, width: componentWidth, height: componentHeight));
                 
                 imageComponents.append(componentImage)
                 
@@ -188,7 +169,7 @@ class FoldView: UIView {
                 componentWidth = CGFloat(width)
                 componentHeight = CGFloat(height) / (CGFloat(foldJointCount + 1))
                 
-                let componentImage = cropImageWithRect(screenShot, rect: CGRect(x: 0, y: CGFloat(i) * componentHeight, width: componentWidth, height: componentHeight));
+                let componentImage = crop(image:screenShot, withRect: CGRect(x: 0, y: CGFloat(i) * componentHeight, width: componentWidth, height: componentHeight));
                 
                 imageComponents.append(componentImage)
                 
@@ -199,23 +180,12 @@ class FoldView: UIView {
     }
     
     fileprivate func createLayers() {
-        
+
         let disabledActions = ["sublayerTransform": NSNull(), "transform": NSNull(), "opacity": NSNull()]
-        
-        let imageCount = imageComponents.count;
-        perspectiveLayer = CALayer()
-        perspectiveLayer.frame = CGRect(x: 0,
-                                        y: 0,
-                                        width: componentLayout == .horizontal ? componentWidth * CGFloat(imageCount) : componentWidth,
-                                        height: componentLayout == .horizontal ? componentHeight : CGFloat(imageCount) * componentHeight)
-        
-        var transform = CATransform3DIdentity
-        transform.m34 = -1.0 / perspective
-        perspectiveLayer.actions = disabledActions
-        perspectiveLayer.sublayerTransform = transform;
-        
-        
-        for i in 0 ..< imageCount {
+
+        createPerspectiveLayer(withDisabledActions: disabledActions)
+
+        for i in 0 ..< imageComponents.count {
             
             let jointLayer = CATransformLayer()
             jointLayer.actions = disabledActions
@@ -239,10 +209,10 @@ class FoldView: UIView {
                 } else if foldDirection == .rightToLeft {
                     
                     jointLayer.anchorPoint = CGPoint(x: 1, y: 0.5)
-                    jointLayer.position = CGPoint(x: (i == 0 ? componentWidth * CGFloat(imageCount) : 0), y: componentHeight / 2)
+                    jointLayer.position = CGPoint(x: (i == 0 ? componentWidth * CGFloat(imageComponents.count) : 0), y: componentHeight / 2)
                     subLayer.contents = imageComponents[i].cgImage
                     
-                    let targetImageIndex = imageCount - (i + 1)
+                    let targetImageIndex = imageComponents.count - (i + 1)
                     subLayer.contents = imageComponents[targetImageIndex].cgImage
                 }
                 
@@ -258,10 +228,10 @@ class FoldView: UIView {
                 } else if foldDirection == .bottomToTop {
                     
                     jointLayer.anchorPoint = CGPoint(x: 0.5, y: 1)
-                    jointLayer.position = CGPoint(x: componentWidth / 2, y: (i == 0 ? componentHeight * CGFloat(imageCount) : 0))
+                    jointLayer.position = CGPoint(x: componentWidth / 2, y: (i == 0 ? componentHeight * CGFloat(imageComponents.count) : 0))
                     subLayer.contents = imageComponents[i].cgImage
                     
-                    let targetImageIndex = imageCount - (i + 1)
+                    let targetImageIndex = imageComponents.count - (i + 1)
                     subLayer.contents = imageComponents[targetImageIndex].cgImage
                     
                 }
@@ -295,7 +265,7 @@ class FoldView: UIView {
     }
     
     
-    fileprivate func imageFromView(_ view: UIView) -> UIImage {
+    fileprivate func renderImage(fromView view: UIView) -> UIImage {
         
         UIGraphicsBeginImageContextWithOptions(view.bounds.size, view.isOpaque, 0.0);
         view.layer.render(in: UIGraphicsGetCurrentContext()!);
@@ -306,9 +276,22 @@ class FoldView: UIView {
         return returnImage!;
         
     }
-    
-    
-    fileprivate func cropImageWithRect(_ image: UIImage, rect: CGRect) -> UIImage {
+
+    private func createPerspectiveLayer(withDisabledActions actions:[String : CAAction]?) {
+
+        perspectiveLayer = CALayer()
+        perspectiveLayer.frame = CGRect(x: 0,
+                y: 0,
+                width: componentLayout == .horizontal ? componentWidth * CGFloat(imageComponents.count) : componentWidth,
+                height: componentLayout == .horizontal ? componentHeight : CGFloat(imageComponents.count) * componentHeight)
+
+        var transform = CATransform3DIdentity
+        transform.m34 = -1.0 / perspective
+        perspectiveLayer.actions = actions
+        perspectiveLayer.sublayerTransform = transform;
+    }
+
+    fileprivate func crop(image: UIImage,withRect rect: CGRect) -> UIImage {
         
         let scale = image.scale
         let scaledRect = CGRect(x: rect.origin.x * scale, y: rect.origin.y * scale, width: rect.size.width * scale, height: rect.size.height * scale)

@@ -20,11 +20,9 @@ class ViewController: UIViewController {
         gradient.colors = [UIColor.red.cgColor, UIColor.black.cgColor]
         view.layer.insertSublayer(gradient, at: 0)
         
-        let foldView = FoldView(fromView: view, jointCount: 4, componentLayout: ComponentLayout.vertical, foldDirection: FoldDirection.topToBottom, frame: CGRect(x: 0, y: 0, width: 100, height: 500))
-        
-        foldView.backgroundColor            = UIColor.clear
-        
-        foldView.angle             = 20
+        let foldView = FoldView(fromView: view, jointCount: 4, foldDirection: FoldDirection.topToBottom)
+        foldView.angle             = 0
+        foldView.unfoldLength      = 400
         
         self.view.addSubview(foldView)
         
